@@ -1,0 +1,6 @@
+{
+  "name": "Alimentos Falantes TV",
+  "description": "Plataforma de streaming para publicar, organizar e assistir vídeos animados de alimentos falantes criados com IA.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
