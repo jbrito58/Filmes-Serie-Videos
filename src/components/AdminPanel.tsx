@@ -18,9 +18,13 @@ import {
   Sparkles, 
   Lock, 
   LogOut, 
-  ExternalLink,
-  Save,
-  Globe
+  ExternalLink, 
+  Save, 
+  Globe,
+  Smile,
+  Shuffle,
+  Palette,
+  X
 } from 'lucide-react';
 import { Video, Categoria, Usuario } from '../types';
 import { 
@@ -35,6 +39,44 @@ import {
   uploadMediaToSupabase
 } from '../lib/supabase';
 import confetti from 'canvas-confetti';
+
+export const FOOD_EMOJI_GROUPS = [
+  {
+    name: 'Frutas',
+    icon: '🍎',
+    emojis: ['🍎', '🍌', '🍓', '🍉', '🍇', '🍊', '🍋', '🍍', '🥭', '🍑', '🍒', '🥝', '🥑', '🥥', '🫐', '🍐']
+  },
+  {
+    name: 'Legumes',
+    icon: '🥦',
+    emojis: ['🥦', '🥕', '🌽', '🥔', '🍠', '🥒', '🥬', '🧄', '🧅', '🍄', '🫑', '🍆', '🥜', '🌰', '🍅']
+  },
+  {
+    name: 'Lanches',
+    icon: '🥪',
+    emojis: ['🥪', '🍞', '🧀', '🥞', '🧇', '🍳', '🥨', '🍕', '🍿', '🥣', '🥗', '🍙', '🌮', '🥟']
+  },
+  {
+    name: 'Doces & Sucos',
+    icon: '🧃',
+    emojis: ['🧃', '🥛', '🥤', '🍯', '🍦', '🍪', '🧁', '🍫', '🍩', '🥧', '🍮', '🍨']
+  },
+  {
+    name: 'Aventuras',
+    icon: '✨',
+    emojis: ['✨', '🔬', '🌟', '🎭', '🎵', '🚀', '🎪', '🎨', '👑', '🌈', '🎉', '🤠']
+  }
+];
+
+export const CATEGORY_COLOR_PRESETS = [
+  { name: 'Vermelho Morango', value: 'from-rose-500 to-red-400', border: 'border-rose-500', preview: 'bg-gradient-to-r from-rose-500 to-red-400' },
+  { name: 'Amarelo Banana', value: 'from-amber-500 to-yellow-400', border: 'border-amber-500', preview: 'bg-gradient-to-r from-amber-500 to-yellow-400' },
+  { name: 'Verde Brócolis', value: 'from-emerald-500 to-green-400', border: 'border-emerald-500', preview: 'bg-gradient-to-r from-emerald-500 to-green-400' },
+  { name: 'Laranja Cenoura', value: 'from-orange-500 to-amber-400', border: 'border-orange-500', preview: 'bg-gradient-to-r from-orange-500 to-amber-400' },
+  { name: 'Roxo Uva', value: 'from-purple-500 to-pink-400', border: 'border-purple-500', preview: 'bg-gradient-to-r from-purple-500 to-pink-400' },
+  { name: 'Azul Ciência', value: 'from-cyan-500 to-blue-400', border: 'border-cyan-500', preview: 'bg-gradient-to-r from-cyan-500 to-blue-400' },
+];
+
 
 interface AdminPanelProps {
   videos: Video[];
@@ -85,6 +127,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [newCatIcon, setNewCatIcon] = useState('🍎');
   const [newCatDesc, setNewCatDesc] = useState('');
   const [newCatColor, setNewCatColor] = useState('from-rose-500 to-red-400');
+  const [selectedEmojiGroup, setSelectedEmojiGroup] = useState('Frutas');
+  const [customEmojiInput, setCustomEmojiInput] = useState('');
+  const [catSuccessMessage, setCatSuccessMessage] = useState('');
+  const [showQuickCategoryModal, setShowQuickCategoryModal] = useState(false);
 
   // Supabase Config State
   const savedCreds = getSavedCredentials();
@@ -221,20 +267,48 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   // Category Add Handler
   const handleAddCategorySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCatName) return;
+    if (!newCatName.trim()) {
+      alert('Por favor, informe o nome da categoria.');
+      return;
+    }
 
+    const iconToUse = newCatIcon || '🍎';
     const slug = newCatName.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '');
-    await createCategory({
-      nome: newCatName,
+    
+    const created = await createCategory({
+      nome: newCatName.trim(),
       slug: slug || `cat-${Date.now()}`,
-      icone: newCatIcon,
+      icone: iconToUse,
       cor: newCatColor,
-      descricao: newCatDesc
+      descricao: newCatDesc.trim() || undefined
     });
+
+    confetti({ particleCount: 60, spread: 70 });
+    setCatSuccessMessage(`Categoria "${newCatName}" criada com sucesso com o ícone ${iconToUse}!`);
+    setTimeout(() => setCatSuccessMessage(''), 4500);
 
     setNewCatName('');
     setNewCatDesc('');
+    setCustomEmojiInput('');
     onRefreshData();
+
+    if (showQuickCategoryModal) {
+      setCategoryId(created.id);
+      setShowQuickCategoryModal(false);
+    }
+  };
+
+  const handlePickRandomEmoji = () => {
+    const allEmojis = FOOD_EMOJI_GROUPS.flatMap(g => g.emojis);
+    const random = allEmojis[Math.floor(Math.random() * allEmojis.length)];
+    setNewCatIcon(random);
+  };
+
+  const handleApplyCustomEmoji = () => {
+    if (customEmojiInput.trim()) {
+      setNewCatIcon(customEmojiInput.trim());
+      setCustomEmojiInput('');
+    }
   };
 
   const handleDeleteCategory = async (id: string) => {
@@ -567,7 +641,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               {/* Category & Duration */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-300">Categoria *</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-slate-300">Categoria *</label>
+                    <button
+                      type="button"
+                      onClick={() => setShowQuickCategoryModal(true)}
+                      className="text-[11px] text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1 transition-colors"
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>Nova Categoria</span>
+                    </button>
+                  </div>
                   <select
                     value={categoryId}
                     onChange={(e) => setCategoryId(e.target.value)}
@@ -876,82 +960,291 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
         {/* ================= TAB 4: GERENCIAR CATEGORIAS ================= */}
         {activeTab === 'categories' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-fade-in">
-            {/* Create Category Form */}
-            <div className="p-6 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-4">
-              <h3 className="text-lg font-bold text-white font-display">Criar Nova Categoria</h3>
-              
-              <form onSubmit={handleAddCategorySubmit} className="space-y-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-400">Nome da Categoria *</label>
-                  <input
-                    type="text"
-                    required
-                    value={newCatName}
-                    onChange={(e) => setNewCatName(e.target.value)}
-                    placeholder="Ex: Doces Curiosos"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-400"
-                  />
+          <div className="space-y-6 animate-fade-in">
+            {/* Success message banner */}
+            {catSuccessMessage && (
+              <div className="p-4 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-sm flex items-center gap-3 shadow-lg shadow-emerald-500/5">
+                <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                <span className="font-medium">{catSuccessMessage}</span>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+              {/* Create Category Form (7 cols on lg) */}
+              <div className="lg:col-span-7 p-6 sm:p-7 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-6">
+                <div>
+                  <h3 className="text-xl font-bold text-white font-display flex items-center gap-2">
+                    <FolderPlus className="w-5 h-5 text-amber-400" />
+                    <span>Criar Nova Categoria de Alimentos</span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Defina o nome, escolha ou digite um novo ícone Emoji e escolha a cor temática.
+                  </p>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-400">Ícone Emoji</label>
-                  <input
-                    type="text"
-                    value={newCatIcon}
-                    onChange={(e) => setNewCatIcon(e.target.value)}
-                    placeholder="🍉"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-400"
-                  />
-                </div>
+                <form onSubmit={handleAddCategorySubmit} className="space-y-6">
+                  {/* Category Name & Description */}
+                  <div className="space-y-4">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-slate-300">Nome da Categoria *</label>
+                      <input
+                        type="text"
+                        required
+                        value={newCatName}
+                        onChange={(e) => setNewCatName(e.target.value)}
+                        placeholder="Ex: Frutas Tropicais, Doces Curiosos, Super Legumes..."
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-amber-400"
+                      />
+                    </div>
 
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-400">Descrição</label>
-                  <input
-                    type="text"
-                    value={newCatDesc}
-                    onChange={(e) => setNewCatDesc(e.target.value)}
-                    placeholder="Contos educativos sobre frutas doces..."
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-400"
-                  />
-                </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-slate-300">Descrição Curta</label>
+                      <input
+                        type="text"
+                        value={newCatDesc}
+                        onChange={(e) => setNewCatDesc(e.target.value)}
+                        placeholder="Ex: Aventuras refrescantes e cheias de vitaminas para toda a família"
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-amber-400"
+                      />
+                    </div>
+                  </div>
 
-                <button
-                  type="submit"
-                  className="w-full py-2.5 rounded-xl bg-amber-500 text-slate-950 font-bold text-xs hover:brightness-110 transition-colors flex items-center justify-center gap-1.5"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Cadastrar Categoria</span>
-                </button>
-              </form>
-            </div>
-
-            {/* Categories List */}
-            <div className="lg:col-span-2 space-y-4">
-              <h3 className="text-lg font-bold text-white font-display">Categorias Ativas</h3>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {categories.map((cat) => {
-                  const catCount = videos.filter(v => v.categoria_id === cat.id).length;
-                  return (
-                    <div key={cat.id} className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start justify-between">
+                  {/* ================= SELEÇÃO DO ÍCONE EMOJI ================= */}
+                  <div className="p-4 sm:p-5 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
                       <div className="flex items-center gap-3">
-                        <span className="text-2xl p-2 rounded-xl bg-slate-950 border border-slate-800">{cat.icone}</span>
+                        <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${newCatColor} p-0.5 shadow-lg shadow-amber-500/10 shrink-0`}>
+                          <div className="w-full h-full bg-slate-900 rounded-[14px] flex items-center justify-center text-3xl select-none animate-pulse">
+                            {newCatIcon || '🍎'}
+                          </div>
+                        </div>
                         <div>
-                          <h4 className="text-sm font-bold text-white">{cat.nome}</h4>
-                          <span className="text-xs text-slate-400">{catCount} vídeos vinculados</span>
+                          <span className="text-xs font-bold text-white block">Ícone Emoji Selecionado</span>
+                          <span className="text-[11px] text-amber-400 font-medium">
+                            {newCatIcon ? `Emoji atual: ${newCatIcon}` : 'Nenhum emoji selecionado'}
+                          </span>
                         </div>
                       </div>
+
                       <button
-                        onClick={() => handleDeleteCategory(cat.id)}
-                        className="p-1.5 text-slate-500 hover:text-rose-400 rounded-lg transition-colors"
-                        title="Excluir Categoria"
+                        type="button"
+                        onClick={handlePickRandomEmoji}
+                        className="self-start sm:self-center px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-amber-400 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                        title="Sortear um emoji divertido"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Shuffle className="w-3.5 h-3.5" />
+                        <span>Sortear Emoji 🎲</span>
                       </button>
                     </div>
-                  );
-                })}
+
+                    {/* Emoji Group Tabs */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold text-slate-400 flex items-center gap-1.5">
+                        <Smile className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Escolha um Emoji da Galeria:</span>
+                      </label>
+                      <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 no-scrollbar">
+                        {FOOD_EMOJI_GROUPS.map((group) => (
+                          <button
+                            type="button"
+                            key={group.name}
+                            onClick={() => setSelectedEmojiGroup(group.name)}
+                            className={`px-3 py-1 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                              selectedEmojiGroup === group.name
+                                ? 'bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20'
+                                : 'bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800'
+                            }`}
+                          >
+                            <span>{group.icon}</span> <span className="ml-1">{group.name}</span>
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => setSelectedEmojiGroup('Todos')}
+                          className={`px-3 py-1 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                            selectedEmojiGroup === 'Todos'
+                              ? 'bg-amber-500 text-slate-950 font-bold'
+                              : 'bg-slate-900 border border-slate-800 text-slate-300 hover:text-white'
+                          }`}
+                        >
+                          🌟 Todos
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Grid of Emojis for 1-Click Pick */}
+                    <div className="grid grid-cols-7 sm:grid-cols-8 md:grid-cols-10 gap-2 p-2 bg-slate-900/60 rounded-xl border border-slate-800/80 max-h-44 overflow-y-auto">
+                      {(selectedEmojiGroup === 'Todos' 
+                        ? FOOD_EMOJI_GROUPS.flatMap(g => g.emojis)
+                        : FOOD_EMOJI_GROUPS.find(g => g.name === selectedEmojiGroup)?.emojis || []
+                      ).map((emoji, idx) => (
+                        <button
+                          type="button"
+                          key={`${emoji}-${idx}`}
+                          onClick={() => setNewCatIcon(emoji)}
+                          className={`aspect-square rounded-xl flex items-center justify-center text-2xl hover:scale-125 transition-transform duration-150 ${
+                            newCatIcon === emoji
+                              ? 'bg-amber-500/20 border-2 border-amber-400 scale-110 shadow-md shadow-amber-500/20'
+                              : 'hover:bg-slate-800'
+                          }`}
+                          title={`Escolher ${emoji}`}
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Custom Emoji Input Field */}
+                    <div className="pt-2 space-y-1.5">
+                      <label className="text-xs font-semibold text-slate-300 flex items-center justify-between">
+                        <span>Ou inclua / digite qualquer outro Emoji personalizado:</span>
+                        <span className="text-[10px] text-slate-500">Teclado de emojis do celular ou PC</span>
+                      </label>
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <input
+                            type="text"
+                            value={customEmojiInput}
+                            onChange={(e) => {
+                              setCustomEmojiInput(e.target.value);
+                              if (e.target.value.trim()) {
+                                setNewCatIcon(e.target.value.trim());
+                              }
+                            }}
+                            placeholder="Ex: 🫐, 🫒, 🍯, 🥞, 🧁, 🥧, 🫖..."
+                            className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-4 pr-10 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-amber-400"
+                          />
+                          {customEmojiInput && (
+                            <span className="absolute right-3 top-2 text-lg">
+                              {customEmojiInput}
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleApplyCustomEmoji}
+                          disabled={!customEmojiInput.trim()}
+                          className="px-4 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30 text-xs font-bold transition-colors disabled:opacity-40"
+                        >
+                          Usar Emoji
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-slate-400">
+                        Dica: No Windows use <kbd className="px-1 bg-slate-800 rounded text-slate-300">Win</kbd> + <kbd className="px-1 bg-slate-800 rounded text-slate-300">.</kbd> e no Mac use <kbd className="px-1 bg-slate-800 rounded text-slate-300">Cmd</kbd> + <kbd className="px-1 bg-slate-800 rounded text-slate-300">Ctrl</kbd> + <kbd className="px-1 bg-slate-800 rounded text-slate-300">Espaço</kbd> para abrir o teclado de emojis.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Color Preset Selector */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                      <Palette className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Cor Temática da Categoria:</span>
+                    </label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {CATEGORY_COLOR_PRESETS.map((color) => (
+                        <button
+                          type="button"
+                          key={color.name}
+                          onClick={() => setNewCatColor(color.value)}
+                          className={`flex items-center gap-2 p-2 rounded-xl text-left border transition-all ${
+                            newCatColor === color.value
+                              ? `${color.border} bg-slate-950 shadow-md`
+                              : 'border-slate-800 bg-slate-950/60 hover:border-slate-700'
+                          }`}
+                        >
+                          <span className={`w-4 h-4 rounded-full ${color.preview} shrink-0`} />
+                          <span className="text-xs text-slate-200 font-medium truncate">{color.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Live Card Preview */}
+                  <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
+                      Pré-visualização do Card no Site:
+                    </span>
+                    <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 flex items-center gap-4 relative overflow-hidden">
+                      <div className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-br ${newCatColor} opacity-20 rounded-full blur-xl pointer-events-none`} />
+                      <div className="w-14 h-14 rounded-2xl bg-slate-800 border border-slate-700/80 flex items-center justify-center text-3xl shrink-0">
+                        {newCatIcon || '🍎'}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h4 className="text-base font-bold text-white truncate font-display">
+                          {newCatName || 'Nome da Categoria'}
+                        </h4>
+                        <p className="text-xs text-slate-400 truncate">
+                          {newCatDesc || 'Descrição da categoria de alimentos falantes...'}
+                        </p>
+                      </div>
+                      <span className="text-xs font-semibold text-slate-500 bg-slate-950 px-2.5 py-1 rounded-lg shrink-0">
+                        0 vídeos
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Submit Button */}
+                  <button
+                    type="submit"
+                    className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-400 to-rose-500 text-slate-950 font-bold text-sm hover:brightness-110 transition-all flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Cadastrar Categoria com o Ícone {newCatIcon || '🍎'}</span>
+                  </button>
+                </form>
+              </div>
+
+              {/* Active Categories List (5 cols on lg) */}
+              <div className="lg:col-span-5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-bold text-white font-display">
+                    Categorias Ativas ({categories.length})
+                  </h3>
+                  <span className="text-xs text-amber-400 font-semibold">
+                    Total: {categories.length}
+                  </span>
+                </div>
+
+                <div className="space-y-3 max-h-[700px] overflow-y-auto pr-1">
+                  {categories.map((cat) => {
+                    const catCount = videos.filter(v => v.categoria_id === cat.id).length;
+                    return (
+                      <div
+                        key={cat.id}
+                        className="group relative p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80 hover:border-slate-700 flex items-start justify-between gap-3 transition-all"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${cat.cor || 'from-amber-500 to-yellow-400'} p-0.5 shrink-0`}>
+                            <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center text-2xl">
+                              {cat.icone}
+                            </div>
+                          </div>
+                          <div className="min-w-0">
+                            <h4 className="text-sm font-bold text-white truncate flex items-center gap-1.5 font-display">
+                              <span>{cat.nome}</span>
+                              <span className="text-xs opacity-75">{cat.icone}</span>
+                            </h4>
+                            <p className="text-xs text-slate-400 line-clamp-1">
+                              {cat.descricao || 'Sem descrição cadastrada'}
+                            </p>
+                            <span className="text-[11px] text-amber-400 font-medium block mt-0.5">
+                              {catCount} {catCount === 1 ? 'vídeo vinculado' : 'vídeos vinculados'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => handleDeleteCategory(cat.id)}
+                          className="p-2 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-xl transition-colors shrink-0"
+                          title="Excluir Categoria"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>
@@ -1153,6 +1446,164 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 Salvar Alterações do Perfil
               </button>
             </form>
+          </div>
+        )}
+
+        {/* ================= MODAL RÁPIDO: CRIAR NOVA CATEGORIA ================= */}
+        {showQuickCategoryModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+            <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-7 shadow-2xl space-y-5">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl">{newCatIcon || '🍎'}</span>
+                  <div>
+                    <h3 className="text-lg font-bold text-white font-display">Criar Nova Categoria</h3>
+                    <p className="text-xs text-slate-400">Escolha o nome e o ícone Emoji representativo</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowQuickCategoryModal(false)}
+                  className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <form onSubmit={handleAddCategorySubmit} className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-300">Nome da Categoria *</label>
+                  <input
+                    type="text"
+                    required
+                    value={newCatName}
+                    onChange={(e) => setNewCatName(e.target.value)}
+                    placeholder="Ex: Frutas Mágicas, Lanchinhos..."
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-amber-400"
+                  />
+                </div>
+
+                {/* Selected Emoji display & randomizer */}
+                <div className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${newCatColor} p-0.5 shrink-0`}>
+                      <div className="w-full h-full bg-slate-900 rounded-[10px] flex items-center justify-center text-2xl">
+                        {newCatIcon || '🍎'}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold text-white block">Ícone Escolhido</span>
+                      <span className="text-[11px] text-amber-400">{newCatIcon || '🍎'}</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handlePickRandomEmoji}
+                    className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-300 hover:text-amber-400"
+                  >
+                    Sortear 🎲
+                  </button>
+                </div>
+
+                {/* Quick Emoji Picker Tabs */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-400">Escolha um Emoji:</label>
+                  <div className="flex items-center gap-1 overflow-x-auto pb-1 no-scrollbar">
+                    {FOOD_EMOJI_GROUPS.map((group) => (
+                      <button
+                        type="button"
+                        key={group.name}
+                        onClick={() => setSelectedEmojiGroup(group.name)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
+                          selectedEmojiGroup === group.name
+                            ? 'bg-amber-500 text-slate-950 font-bold'
+                            : 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        {group.icon} {group.name}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-8 gap-1.5 p-2 bg-slate-950 rounded-xl border border-slate-800 max-h-32 overflow-y-auto">
+                    {(FOOD_EMOJI_GROUPS.find(g => g.name === selectedEmojiGroup)?.emojis || FOOD_EMOJI_GROUPS[0].emojis).map((emoji, idx) => (
+                      <button
+                        type="button"
+                        key={`${emoji}-${idx}`}
+                        onClick={() => setNewCatIcon(emoji)}
+                        className={`aspect-square rounded-lg flex items-center justify-center text-xl hover:scale-125 transition-transform ${
+                          newCatIcon === emoji ? 'bg-amber-500/20 border border-amber-400' : 'hover:bg-slate-800'
+                        }`}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Custom Emoji field */}
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-400">Ou digite qualquer outro Emoji:</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={customEmojiInput}
+                      onChange={(e) => {
+                        setCustomEmojiInput(e.target.value);
+                        if (e.target.value.trim()) setNewCatIcon(e.target.value.trim());
+                      }}
+                      placeholder="Cole qualquer emoji do teclado (ex: 🫐, 🫒...)"
+                      className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleApplyCustomEmoji}
+                      disabled={!customEmojiInput.trim()}
+                      className="px-3 py-1.5 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs font-bold disabled:opacity-40"
+                    >
+                      Aplicar
+                    </button>
+                  </div>
+                </div>
+
+                {/* Color themes */}
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-400">Cor Temática:</label>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {CATEGORY_COLOR_PRESETS.map((color) => (
+                      <button
+                        type="button"
+                        key={color.name}
+                        onClick={() => setNewCatColor(color.value)}
+                        className={`flex items-center gap-1.5 p-1.5 rounded-lg border text-xs ${
+                          newCatColor === color.value ? `${color.border} bg-slate-950` : 'border-slate-800 bg-slate-950/60'
+                        }`}
+                      >
+                        <span className={`w-3 h-3 rounded-full ${color.preview} shrink-0`} />
+                        <span className="truncate text-[11px] text-slate-300">{color.name.split(' ')[0]}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Action buttons */}
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setShowQuickCategoryModal(false)}
+                    className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 text-slate-950 font-bold text-xs hover:brightness-110 transition-all flex items-center gap-1.5"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Criar e Usar Categoria</span>
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         )}
 
