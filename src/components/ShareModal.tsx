@@ -13,7 +13,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({ video, onClose }) => {
   if (!video) return null;
 
   const currentUrl = window.location.href;
-  const shareText = `Assista ao episódio divertido "${video.titulo}" no Alimentos Falantes TV!`;
+  const shareText = `Assista ao episódio divertido "${video.titulo}" na Plataforma Livre!`;
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(currentUrl);

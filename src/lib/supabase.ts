@@ -402,7 +402,7 @@ export function addCommentToVideo(videoId: string, comment: { autor: string; emo
 
 // Complete Ready-to-Execute Supabase SQL Schema for the User
 export const SUPABASE_SQL_SCHEMA = `-- ========================================================
--- ALIMENTOS FALANTES TV - SCHEMA COMPLETO PARA O SUPABASE
+-- PLATAFORMA LIVRE - SCHEMA COMPLETO PARA O SUPABASE
 -- Execute este script no SQL Editor do seu projeto Supabase
 -- ========================================================
 
@@ -429,7 +429,7 @@ CREATE TABLE IF NOT EXISTS public.videos (
   visualizacoes BIGINT DEFAULT 0,
   curtidas BIGINT DEFAULT 0,
   duracao TEXT DEFAULT '03:30',
-  autor TEXT DEFAULT 'Estúdio Alimentos Falantes',
+  autor TEXT DEFAULT 'Plataforma Livre',
   tags TEXT[] DEFAULT ARRAY[]::TEXT[],
   created_at TIMESTAMPTZ DEFAULT NOW()
 );

@@ -382,7 +382,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 text-xs text-amber-400 font-semibold uppercase tracking-wider">
-                    <span>{category?.nome || 'Alimentos Falantes'}</span>
+                    <span>{category?.nome || 'Plataforma Livre'}</span>
                     <span aria-hidden="true">·</span>
                     <span className="text-slate-400">Classificação Livre</span>
                   </div>
@@ -429,7 +429,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 <span aria-hidden="true">·</span>
                 <span className="flex items-center gap-1.5">
                   <User className="w-4 h-4" />
-                  {video.autor || 'Estúdio Alimentos Falantes'}
+                  {video.autor || 'Plataforma Livre'}
                 </span>
               </div>
 

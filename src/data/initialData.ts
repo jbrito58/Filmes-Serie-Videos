@@ -65,7 +65,7 @@ export const INITIAL_VIDEOS: Video[] = [
     curtidas: 12430,
     duracao: '04:15',
     created_at: '2026-03-28T14:30:00Z',
-    autor: 'Estúdio Alimentos Falantes IA',
+    autor: 'Estúdio Plataforma Livre',
     tags: ['Frutas', 'Musical', 'Família', 'Destaque']
   },
   {
@@ -110,7 +110,7 @@ export const INITIAL_VIDEOS: Video[] = [
     curtidas: 7650,
     duracao: '02:55',
     created_at: '2026-03-20T16:45:00Z',
-    autor: 'Estúdio Alimentos Falantes IA',
+    autor: 'Estúdio Plataforma Livre',
     tags: ['Morango', 'Música', 'Dança']
   },
   {

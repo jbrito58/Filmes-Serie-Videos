@@ -14,10 +14,10 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
         <div className="flex flex-col items-center md:items-start space-y-2 text-center md:text-left">
           <div className="flex items-center gap-2">
             <span className="text-2xl">🍌</span>
-            <span className="text-lg font-bold text-white font-display">Alimentos Falantes TV</span>
+            <span className="text-lg font-bold text-white font-display">Plataforma Livre</span>
           </div>
           <p className="text-xs text-slate-400 max-w-sm">
-            Histórias encantadoras e lições de nutrição com alimentos animados por Inteligência Artificial para crianças e famílias.
+            Histórias encantadoras, curiosidades e animações criadas com Inteligência Artificial para crianças e toda a família.
           </p>
         </div>
 
@@ -42,7 +42,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
 
         {/* Copyright */}
         <div className="text-xs text-slate-400 text-center md:text-right">
-          <p>© {new Date().getFullYear()} Alimentos Falantes TV. Todos os direitos reservados.</p>
+          <p>© {new Date().getFullYear()} Plataforma Livre. Todos os direitos reservados.</p>
           <p className="text-[11px] text-slate-400 mt-1">Feito com carinho para inspirar hábitos saudáveis.</p>
         </div>
 

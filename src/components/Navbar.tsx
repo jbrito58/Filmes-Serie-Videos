@@ -61,10 +61,10 @@ export const Navbar: React.FC<NavbarProps> = ({
               </div>
               <div className="flex flex-col">
                 <span className="text-xl sm:text-2xl font-bold tracking-tight font-display bg-gradient-to-r from-amber-400 via-rose-400 to-emerald-400 bg-clip-text text-transparent">
-                  Alimentos Falantes TV
+                  Plataforma Livre
                 </span>
                 <span className="text-[10px] uppercase font-semibold tracking-wider text-slate-400 -mt-1 hidden sm:block">
-                  Streaming Educativo & Divertido
+                  Streaming Educativo & Criativo
                 </span>
               </div>
             </button>

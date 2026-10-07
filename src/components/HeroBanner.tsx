@@ -51,7 +51,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
               Episódio em Destaque
             </span>
             <span aria-hidden="true" className="text-slate-500">·</span>
-            <span>{category?.nome || 'Alimentos Falantes'}</span>
+            <span>{category?.nome || 'Plataforma Livre'}</span>
             <span aria-hidden="true" className="text-slate-500">·</span>
             <span>{video.duracao || '04:15'}</span>
             <span aria-hidden="true" className="text-slate-500">·</span>

@@ -97,7 +97,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     return localStorage.getItem('alimentos_admin_auth') === 'true';
   });
-  const [loginEmail, setLoginEmail] = useState('admin@alimentosfalantes.tv');
+  const [loginEmail, setLoginEmail] = useState('admin@plataformalivre.tv');
   const [loginPassword, setLoginPassword] = useState('admin123');
   const [authError, setAuthError] = useState('');
 
@@ -111,7 +111,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [description, setDescription] = useState('');
   const [categoryId, setCategoryId] = useState(categories[0]?.id || '');
   const [duration, setDuration] = useState('03:30');
-  const [author, setAuthor] = useState('Estúdio Alimentos Falantes IA');
+  const [author, setAuthor] = useState('Estúdio Plataforma Livre');
   const [tagsInput, setTagsInput] = useState('Frutas, Aventura, Infantil');
   const [isFeatured, setIsFeatured] = useState(false);
   const [videoUrl, setVideoUrl] = useState('');
@@ -143,7 +143,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [adminUser, setAdminUser] = useState<Usuario>({
     id: 'usr-admin-1',
     nome: 'Diretoria de Criação',
-    email: 'admin@alimentosfalantes.tv',
+    email: 'admin@plataformalivre.tv',
     role: 'admin',
     avatar: '🍌'
   });
@@ -354,7 +354,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               🍌
             </div>
             <h2 className="text-2xl font-bold text-white font-display">Painel Administrativo</h2>
-            <p className="text-xs text-slate-400">Área protegida para criadores de Alimentos Falantes TV</p>
+            <p className="text-xs text-slate-400">Área protegida para criadores da Plataforma Livre</p>
           </div>
 
           {authError && (
@@ -372,7 +372,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 value={loginEmail}
                 onChange={(e) => setLoginEmail(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-amber-400"
-                placeholder="admin@alimentosfalantes.tv"
+                placeholder="admin@plataformalivre.tv"
               />
             </div>
 
@@ -422,7 +422,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <span>Painel de Controle & CMS</span>
             </div>
             <h1 className="text-3xl font-extrabold text-white font-display">
-              Studio Alimentos Falantes TV
+              Studio Plataforma Livre
             </h1>
           </div>
 

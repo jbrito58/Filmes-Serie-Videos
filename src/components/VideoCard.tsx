@@ -98,7 +98,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
 
         {/* Card Footer Actions */}
         <div className="flex items-center justify-between pt-2 border-t border-slate-800/60 text-xs text-slate-400">
-          <span className="truncate max-w-[130px]">{video.autor || 'Alimentos Falantes TV'}</span>
+          <span className="truncate max-w-[130px]">{video.autor || 'Plataforma Livre'}</span>
           <div className="flex items-center gap-1">
             {onShare && (
               <button

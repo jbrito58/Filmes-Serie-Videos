@@ -1,6 +1,6 @@
-# 🍌 Alimentos Falantes TV - Guia de Configuração & Deploy
+# 🍌 Plataforma Livre - Guia de Configuração & Deploy
 
-Plataforma de streaming completa para publicar, organizar e assistir vídeos animados de alimentos falantes criados com inteligência artificial.
+Plataforma de streaming completa para publicar, organizar e assistir vídeos e animações criados com inteligência artificial.
 
 ---
 
@@ -8,7 +8,7 @@ Plataforma de streaming completa para publicar, organizar e assistir vídeos ani
 
 ### Passo 1: Criar o Projeto no Supabase
 1. Acesse [https://supabase.com](https://supabase.com) e crie uma conta gratuita.
-2. Crie um novo projeto com o nome **"alimentos-falantes-tv"**.
+2. Crie um novo projeto com o nome **"plataforma-livre"**.
 3. Guarde sua senha do banco de dados com segurança.
 
 ### Passo 2: Executar o Script SQL no SQL Editor
@@ -114,7 +114,7 @@ VITE_SUPABASE_ANON_KEY="sua-chave-anon-publica"
 
 1. Envie o código para o seu repositório no **GitHub** ou **GitLab**.
 2. Acesse [https://vercel.com](https://vercel.com) e clique em **Add New... > Project**.
-3. Selecione o repositório **alimentos-falantes-tv**.
+3. Selecione o repositório **plataforma-livre**.
 4. A Vercel detectará o projeto automaticamente como Vite SPA.
 5. Em **Environment Variables**, adicione:
    - `VITE_SUPABASE_URL`: sua URL do Supabase

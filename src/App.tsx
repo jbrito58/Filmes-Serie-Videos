@@ -155,7 +155,7 @@ export default function App() {
         {loading ? (
           <div className="min-h-[70vh] flex flex-col items-center justify-center space-y-4">
             <div className="w-12 h-12 rounded-full border-4 border-amber-500 border-t-transparent animate-spin" />
-            <p className="text-sm font-semibold text-slate-400">Preparando as comidinhas falantes...</p>
+            <p className="text-sm font-semibold text-slate-400">Carregando a Plataforma Livre...</p>
           </div>
         ) : (
           <>
