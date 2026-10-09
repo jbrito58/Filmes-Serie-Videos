@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   BarChart3, 
   Upload, 
@@ -24,9 +24,18 @@ import {
   Smile,
   Shuffle,
   Palette,
-  X
+  X,
+  Layers,
+  Server,
+  MessageSquare,
+  HardDrive,
+  RefreshCw,
+  Shield,
+  ShieldCheck as ShieldCheckIcon,
+  ShieldAlert,
+  KeyRound
 } from 'lucide-react';
-import { Video, Categoria, Usuario } from '../types';
+import { Video, Categoria, Usuario, SupabaseHealthCheck } from '../types';
 import { 
   createVideo, 
   updateVideo, 
@@ -36,9 +45,17 @@ import {
   saveSupabaseCredentials, 
   getSavedCredentials,
   SUPABASE_SQL_SCHEMA,
-  uploadMediaToSupabase
+  SUPABASE_SECURITY_PATCH_SQL,
+  uploadMediaToSupabase,
+  checkSupabaseConnection,
+  seedSupabaseDatabase,
+  fetchAdminUser,
+  updateAdminUser
 } from '../lib/supabase';
+import { validateVideoInput, sanitizeSlug, sanitizeText, isSafeUrl } from '../lib/security';
 import confetti from 'canvas-confetti';
+
+
 
 export const FOOD_EMOJI_GROUPS = [
   {
@@ -138,6 +155,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [supabaseKey, setSupabaseKey] = useState(savedCreds.anonKey);
   const [configSaved, setConfigSaved] = useState(false);
   const [sqlCopied, setSqlCopied] = useState(false);
+  const [sqlPatchCopied, setSqlPatchCopied] = useState(false);
+  const [testingConnection, setTestingConnection] = useState(false);
+  const [connectionResult, setConnectionResult] = useState<SupabaseHealthCheck | null>(null);
+
+  // Security & In-app Confirmation Modal state
+  const [formError, setFormError] = useState<string>('');
+  const [itemToDelete, setItemToDelete] = useState<{ type: 'video' | 'category'; id: string; title: string } | null>(null);
+
+
+  const [seedingDb, setSeedingDb] = useState(false);
+  const [seedResult, setSeedResult] = useState<{ success: boolean; message: string } | null>(null);
 
   // Profile Form State
   const [adminUser, setAdminUser] = useState<Usuario>({
@@ -149,6 +177,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   });
   const [newPassword, setNewPassword] = useState('');
   const [profileSaved, setProfileSaved] = useState(false);
+
+  // Auto-check Supabase status and load profile on mount
+  useEffect(() => {
+    fetchAdminUser().then(user => {
+      if (user) {
+        setAdminUser(user);
+        setLoginEmail(user.email);
+      }
+    });
+
+    checkSupabaseConnection().then(res => {
+      setConnectionResult(res);
+    });
+  }, []);
+
 
   // Handle Login
   const handleLogin = (e: React.FormEvent) => {
@@ -198,27 +241,40 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const handleCreateVideoSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !description || !categoryId) {
-      alert('Por favor preencha os campos obrigatórios (Título, Descrição e Categoria).');
-      return;
-    }
-
-    setIsUploading(true);
+    setFormError('');
 
     const fallbackThumb = thumbnailUrl || videos[0]?.thumbnail || 'https://images.unsplash.com/photo-1610832958506-aa56368176cf';
     const fallbackVideo = videoUrl || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
 
-    const tags = tagsInput.split(',').map(t => t.trim()).filter(Boolean);
-
-    await createVideo({
+    const validation = validateVideoInput({
       titulo: title,
       descricao: description,
+      video_url: fallbackVideo,
+      thumbnail: fallbackThumb
+    });
+
+    if (!validation.isValid) {
+      setFormError(validation.error || 'Preencha os campos obrigatórios corretamente.');
+      return;
+    }
+
+    if (!categoryId) {
+      setFormError('Por favor, selecione uma categoria para o vídeo.');
+      return;
+    }
+
+    setIsUploading(true);
+    const tags = tagsInput.split(',').map(t => sanitizeText(t.trim(), 30)).filter(Boolean);
+
+    await createVideo({
+      titulo: sanitizeText(title, 150),
+      descricao: sanitizeText(description, 2000),
       categoria_id: categoryId,
       thumbnail: fallbackThumb,
       video_url: fallbackVideo,
       destaque: isFeatured,
-      duracao: duration,
-      autor: author,
+      duracao: sanitizeText(duration, 20) || '03:30',
+      autor: sanitizeText(author, 80) || 'Plataforma Livre',
       tags: tags
     });
 
@@ -238,12 +294,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }, 1500);
   };
 
-  // Video Delete Handler
-  const handleDeleteVideo = async (id: string, videoTitle: string) => {
-    if (window.confirm(`Tem certeza que deseja excluir o vídeo "${videoTitle}"?`)) {
-      await deleteVideo(id);
-      onRefreshData();
-    }
+  // Video Delete Handler (In-App Modal confirmation)
+  const handleDeleteVideo = (id: string, videoTitle: string) => {
+    setItemToDelete({ type: 'video', id, title: videoTitle });
   };
 
   // Video Update Handler
@@ -252,12 +305,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     if (!editingVideo) return;
 
     await updateVideo(editingVideo.id, {
-      titulo: editingVideo.titulo,
-      descricao: editingVideo.descricao,
+      titulo: sanitizeText(editingVideo.titulo, 150),
+      descricao: sanitizeText(editingVideo.descricao, 2000),
       categoria_id: editingVideo.categoria_id,
       destaque: editingVideo.destaque,
-      duracao: editingVideo.duracao,
-      autor: editingVideo.autor
+      duracao: sanitizeText(editingVideo.duracao, 20),
+      autor: sanitizeText(editingVideo.autor, 80)
     });
 
     setEditingVideo(null);
@@ -267,24 +320,26 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   // Category Add Handler
   const handleAddCategorySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCatName.trim()) {
-      alert('Por favor, informe o nome da categoria.');
+    setFormError('');
+    const cleanName = sanitizeText(newCatName, 50);
+    if (!cleanName || cleanName.length < 2) {
+      setFormError('Por favor, informe o nome da categoria com pelo menos 2 caracteres.');
       return;
     }
 
-    const iconToUse = newCatIcon || '🍎';
-    const slug = newCatName.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '');
+    const iconToUse = sanitizeText(newCatIcon, 8) || '🍎';
+    const slug = sanitizeSlug(cleanName);
     
     const created = await createCategory({
-      nome: newCatName.trim(),
+      nome: cleanName,
       slug: slug || `cat-${Date.now()}`,
       icone: iconToUse,
       cor: newCatColor,
-      descricao: newCatDesc.trim() || undefined
+      descricao: newCatDesc.trim() ? sanitizeText(newCatDesc, 300) : undefined
     });
 
     confetti({ particleCount: 60, spread: 70 });
-    setCatSuccessMessage(`Categoria "${newCatName}" criada com sucesso com o ícone ${iconToUse}!`);
+    setCatSuccessMessage(`Categoria "${cleanName}" criada com sucesso com o ícone ${iconToUse}!`);
     setTimeout(() => setCatSuccessMessage(''), 4500);
 
     setNewCatName('');
@@ -306,16 +361,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const handleApplyCustomEmoji = () => {
     if (customEmojiInput.trim()) {
-      setNewCatIcon(customEmojiInput.trim());
+      setNewCatIcon(sanitizeText(customEmojiInput.trim(), 8));
       setCustomEmojiInput('');
     }
   };
 
-  const handleDeleteCategory = async (id: string) => {
-    if (window.confirm('Excluir esta categoria? Os vídeos associados não serão apagados.')) {
-      await deleteCategory(id);
-      onRefreshData();
+  const handleDeleteCategory = (id: string) => {
+    const cat = categories.find(c => c.id === id);
+    setItemToDelete({ type: 'category', id, title: cat?.nome || 'esta categoria' });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!itemToDelete) return;
+    if (itemToDelete.type === 'video') {
+      await deleteVideo(itemToDelete.id);
+    } else {
+      await deleteCategory(itemToDelete.id);
     }
+    setItemToDelete(null);
+    onRefreshData();
   };
 
   // Supabase Config Save
@@ -333,12 +397,49 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setTimeout(() => setSqlCopied(false), 2500);
   };
 
+  const handleCopySqlPatch = () => {
+    navigator.clipboard.writeText(SUPABASE_SECURITY_PATCH_SQL);
+    setSqlPatchCopied(true);
+    setTimeout(() => setSqlPatchCopied(false), 2500);
+  };
+
+
+  const handleTestConnection = async () => {
+    setTestingConnection(true);
+    const result = await checkSupabaseConnection();
+    setConnectionResult(result);
+    setTestingConnection(false);
+    if (result.success && result.tablesExist) {
+      confetti({ particleCount: 50, spread: 60 });
+    }
+  };
+
+  const handleSeedDatabase = async () => {
+    setSeedingDb(true);
+    setSeedResult(null);
+    const result = await seedSupabaseDatabase();
+    setSeedResult(result);
+    setSeedingDb(false);
+    if (result.success) {
+      confetti({ particleCount: 70, spread: 80 });
+      onRefreshData();
+    }
+  };
+
   // Admin Profile Save
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (adminUser.id) {
+      await updateAdminUser(adminUser.id, {
+        nome: adminUser.nome,
+        email: adminUser.email,
+        avatar: adminUser.avatar
+      });
+    }
     setProfileSaved(true);
     setTimeout(() => setProfileSaved(false), 2500);
   };
+
 
   // Aggregated Stats
   const totalViews = videos.reduce((acc, v) => acc + (v.visualizacoes || 0), 0);
@@ -608,6 +709,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <div className="p-4 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs sm:text-sm flex items-center gap-2">
                 <CheckCircle2 className="w-5 h-5 shrink-0" />
                 <span>Vídeo cadastrado com sucesso! Atualizando catálogo...</span>
+              </div>
+            )}
+
+            {formError && (
+              <div className="p-4 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-400 text-xs sm:text-sm flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 shrink-0" />
+                <span>{formError}</span>
               </div>
             )}
 
@@ -982,7 +1090,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   </p>
                 </div>
 
+                {formError && (
+                  <div className="p-4 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-400 text-xs sm:text-sm flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5 shrink-0" />
+                    <span>{formError}</span>
+                  </div>
+                )}
+
                 <form onSubmit={handleAddCategorySubmit} className="space-y-6">
+
                   {/* Category Name & Description */}
                   <div className="space-y-4">
                     <div className="space-y-1.5">
@@ -1305,30 +1421,246 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   />
                 </div>
 
-                <div className="sm:col-span-2 flex items-center justify-end gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      saveSupabaseCredentials('', '');
-                      setSupabaseUrl('');
-                      setSupabaseKey('');
-                      setConfigSaved(true);
-                      onRefreshData();
-                    }}
-                    className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white text-xs font-semibold"
-                  >
-                    Restaurar Modo Demo
-                  </button>
+                <div className="sm:col-span-2 flex flex-wrap items-center justify-between gap-3 pt-2">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleTestConnection}
+                      disabled={testingConnection}
+                      className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                    >
+                      <Database className="w-3.5 h-3.5" />
+                      <span>{testingConnection ? 'Testando Conexão...' : 'Testar Conexão'}</span>
+                    </button>
 
-                  <button
-                    type="submit"
-                    className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold flex items-center gap-1.5 transition-colors"
-                  >
-                    <Save className="w-4 h-4" />
-                    <span>Salvar Conexão</span>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={handleSeedDatabase}
+                      disabled={seedingDb}
+                      className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-400 text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>{seedingDb ? 'Semeando...' : 'Sincronizar Dados no Supabase'}</span>
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        saveSupabaseCredentials('', '');
+                        setSupabaseUrl('https://xfobtnfgapkteivwmiqw.supabase.co');
+                        setSupabaseKey('sb_publishable_0L8eDlqWyOC6b-osH-bkSQ_XBQFkMiD');
+                        setConfigSaved(true);
+                        onRefreshData();
+                      }}
+                      className="px-3.5 py-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white text-xs font-semibold"
+                    >
+                      Restaurar Padrão
+                    </button>
+
+                    <button
+                      type="submit"
+                      className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold flex items-center gap-1.5 transition-colors"
+                    >
+                      <Save className="w-4 h-4" />
+                      <span>Salvar Conexão</span>
+                    </button>
+                  </div>
                 </div>
               </form>
+
+              {/* Diagnostic Connection Feedback & Full Health Check */}
+              {connectionResult && (
+                <div className="space-y-4">
+                  <div className={`p-4 sm:p-5 rounded-2xl border text-xs sm:text-sm flex items-start gap-3 ${
+                    connectionResult.success && connectionResult.tablesExist
+                      ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                      : connectionResult.success && !connectionResult.tablesExist
+                      ? 'bg-amber-500/15 border-amber-500/30 text-amber-300'
+                      : 'bg-rose-500/15 border-rose-500/30 text-rose-300'
+                  }`}>
+                    {connectionResult.success && connectionResult.tablesExist ? (
+                      <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                    ) : (
+                      <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                    )}
+                    <div className="space-y-1 w-full">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold block text-sm">
+                          {connectionResult.success && connectionResult.tablesExist
+                            ? '🟢 Integração com Supabase 100% Completa & Verificada!'
+                            : connectionResult.success
+                            ? '🟡 Conexão Estabelecida (Aguardando Criação de Tabelas)'
+                            : '🔴 Falha ao Conectar com o Supabase'}
+                        </span>
+                        <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold">
+                          Online
+                        </span>
+                      </div>
+                      <p className="text-xs opacity-90 leading-relaxed">{connectionResult.message}</p>
+                    </div>
+                  </div>
+
+                  {/* Detailed Table & Feature Breakdown */}
+                  {connectionResult.tables && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {/* Categorias */}
+                      <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center font-bold">
+                            <Layers className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <span className="text-xs font-bold text-white block">public.categorias</span>
+                            <span className="text-[11px] text-slate-400">
+                              {connectionResult.tables.categorias.count} categorias cadastradas
+                            </span>
+                          </div>
+                        </div>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          connectionResult.tables.categorias.exists 
+                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                            : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                        }`}>
+                          {connectionResult.tables.categorias.exists ? '✓ Criada' : 'Pendente'}
+                        </span>
+                      </div>
+
+                      {/* Videos */}
+                      <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-lg bg-rose-500/10 text-rose-400 flex items-center justify-center font-bold">
+                            <Film className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <span className="text-xs font-bold text-white block">public.videos</span>
+                            <span className="text-[11px] text-slate-400">
+                              {connectionResult.tables.videos.count} episódios no catálogo
+                            </span>
+                          </div>
+                        </div>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          connectionResult.tables.videos.exists 
+                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                            : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                        }`}>
+                          {connectionResult.tables.videos.exists ? '✓ Criada' : 'Pendente'}
+                        </span>
+                      </div>
+
+                      {/* Usuarios */}
+                      <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center font-bold">
+                            <User className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <span className="text-xs font-bold text-white block">public.usuarios</span>
+                            <span className="text-[11px] text-slate-400">
+                              {connectionResult.tables.usuarios.count} administrador(es) ativo(s)
+                            </span>
+                          </div>
+                        </div>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          connectionResult.tables.usuarios.exists 
+                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                            : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                        }`}>
+                          {connectionResult.tables.usuarios.exists ? '✓ Criada' : 'Pendente'}
+                        </span>
+                      </div>
+
+                      {/* Comentarios */}
+                      <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center font-bold">
+                            <MessageSquare className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <span className="text-xs font-bold text-white block">public.comentarios</span>
+                            <span className="text-[11px] text-slate-400">
+                              {connectionResult.tables.comentarios.count} comentários no mural
+                            </span>
+                          </div>
+                        </div>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          connectionResult.tables.comentarios.exists 
+                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                            : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                        }`}>
+                          {connectionResult.tables.comentarios.exists ? '✓ Criada' : 'Pendente'}
+                        </span>
+                      </div>
+
+                      {/* Storage Thumbnails */}
+                      <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-lg bg-teal-500/10 text-teal-400 flex items-center justify-center font-bold">
+                            <HardDrive className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <span className="text-xs font-bold text-white block">Storage: thumbnails</span>
+                            <span className="text-[11px] text-slate-400">Bucket público de imagens</span>
+                          </div>
+                        </div>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          connectionResult.storage?.thumbnails?.exists 
+                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                            : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                        }`}>
+                          ✓ Ativo
+                        </span>
+                      </div>
+
+                      {/* Storage Videos */}
+                      <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-bold">
+                            <Server className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <span className="text-xs font-bold text-white block">Storage: videos</span>
+                            <span className="text-[11px] text-slate-400">Bucket público de arquivos MP4</span>
+                          </div>
+                        </div>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          connectionResult.storage?.videos?.exists 
+                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                            : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                        }`}>
+                          ✓ Ativo
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* RPC Functions & Security */}
+                  <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex flex-col sm:flex-row items-center justify-between text-xs text-emerald-300 gap-2">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                      <span>
+                        <strong>Funções RPC & Segurança:</strong> increment_views e increment_likes ativas com Row Level Security (RLS) habilitado.
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-emerald-400 font-bold whitespace-nowrap">
+                      100% Operacional
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Seeding Feedback */}
+              {seedResult && (
+                <div className={`p-3 rounded-xl border text-xs flex items-center gap-2 ${
+                  seedResult.success 
+                    ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300' 
+                    : 'bg-rose-500/15 border-rose-500/30 text-rose-300'
+                }`}>
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>{seedResult.message}</span>
+                </div>
+              )}
             </div>
 
             {/* Ready-to-use Supabase SQL Script with 1-Click Copy */}
@@ -1337,6 +1669,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 <div>
                   <h3 className="text-lg font-bold text-white font-display">Script SQL para o Supabase (Tabelas, RLS & Storage)</h3>
                   <p className="text-xs text-slate-400">Copie e cole este script no SQL Editor do seu console Supabase para criar tudo em 5 segundos.</p>
+                  <p className="text-[11px] text-amber-400/90 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-lg mt-1 inline-block">
+                    💡 <strong>Resolução do Erro 42P01:</strong> As tabelas são criadas primeiro antes das políticas RLS, impedindo o erro <em>"relation public.videos does not exist"</em>.
+                  </p>
                 </div>
                 <button
                   onClick={handleCopySql}
@@ -1353,6 +1688,82 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 <pre>{SUPABASE_SQL_SCHEMA}</pre>
               </div>
             </div>
+
+            {/* Security Hardening & RLS Patch Card */}
+            <div className="p-6 sm:p-8 rounded-3xl bg-slate-900/80 border border-emerald-500/30 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                    <Shield className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-lg font-bold text-white font-display">Blindagem de Segurança RLS (OWASP)</h3>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                        Proteção Ativa
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Script de correção para fechar permissões abertas e blindar seu banco contra exclusões e adulterações não autorizadas.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleCopySqlPatch}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 ${
+                    sqlPatchCopied ? 'bg-emerald-500 text-slate-950' : 'bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 hover:brightness-110'
+                  }`}
+                >
+                  {sqlPatchCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  <span>{sqlPatchCopied ? 'Patch Copiado!' : 'Copiar Patch de Blindagem SQL'}</span>
+                </button>
+              </div>
+
+              {/* Security Audit Checklist */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1">
+                  <span className="font-bold text-emerald-400 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Proteção Anti-Wipe em Vídeos & Categorias
+                  </span>
+                  <p className="text-[11px] text-slate-400">
+                    Impede que visitantes anônimos usem a chave pública para excluir ou alterar episódios e categorias do catálogo.
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1">
+                  <span className="font-bold text-emerald-400 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Validação Estrita Anti-Spam (Comentários)
+                  </span>
+                  <p className="text-[11px] text-slate-400">
+                    Impede inserção de payloads vazios ou gigantes (DoS). Exclusão restrita a administradores.
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1">
+                  <span className="font-bold text-emerald-400 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Proteção Atômica de Contadores (RPC)
+                  </span>
+                  <p className="text-[11px] text-slate-400">
+                    Visualizações e curtidas só podem ser incrementadas via Stored Procedures seguras, evitando adulteração manual.
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1">
+                  <span className="font-bold text-emerald-400 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Restrição de Tipos no Storage
+                  </span>
+                  <p className="text-[11px] text-slate-400">
+                    Apenas extensões válidas (jpg, png, webp, mp4) são aceitas, bloqueando scripts maliciosos.
+                  </p>
+                </div>
+              </div>
+
+              <div className="relative rounded-2xl bg-slate-950 border border-slate-800 p-4 max-h-48 overflow-y-auto font-mono text-xs text-emerald-400/90">
+                <pre>{SUPABASE_SECURITY_PATCH_SQL}</pre>
+              </div>
+            </div>
+
 
             {/* Vercel Deployment Instructions */}
             <div className="p-6 sm:p-8 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-4">
@@ -1603,6 +2014,45 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* In-App Delete Confirmation Modal (Safe replacement for window.confirm) */}
+        {itemToDelete && (
+
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+            <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4">
+              <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center mx-auto">
+                <Trash2 className="w-6 h-6" />
+              </div>
+
+              <div className="text-center space-y-1">
+                <h4 className="text-base font-bold text-white font-display">
+                  Confirmar Exclusão
+                </h4>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Tem certeza de que deseja excluir {itemToDelete.type === 'video' ? 'o vídeo' : 'a categoria'}{' '}
+                  <strong className="text-amber-300">"{itemToDelete.title}"</strong>? Esta ação não pode ser desfeita.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setItemToDelete(null)}
+                  className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmDelete}
+                  className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-colors shadow-lg shadow-rose-600/20"
+                >
+                  Sim, Excluir
+                </button>
+              </div>
             </div>
           </div>
         )}

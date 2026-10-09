@@ -1,6 +1,7 @@
 import React from 'react';
 import { Play, Heart, Clock, Eye, Share2 } from 'lucide-react';
 import { Video, Categoria } from '../types';
+import { sanitizeSafeUrl } from '../lib/security';
 
 interface VideoCardProps {
   video: Video;
@@ -21,6 +22,8 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   onToggleFavorite,
   onShare
 }) => {
+  const safeThumbnail = sanitizeSafeUrl(video.thumbnail);
+
   return (
     <article className="group relative flex flex-col rounded-2xl overflow-hidden bg-slate-900/60 border border-slate-800/80 hover:border-amber-500/50 hover:shadow-xl hover:shadow-amber-500/10 transition-all duration-300">
       {/* Thumbnail Aspect 16:9 */}
@@ -29,7 +32,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         onClick={() => onPlay(video)}
       >
         <img
-          src={video.thumbnail}
+          src={safeThumbnail}
           alt={video.titulo}
           referrerPolicy="no-referrer"
           className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"

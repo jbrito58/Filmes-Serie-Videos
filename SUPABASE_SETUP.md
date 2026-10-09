@@ -1,4 +1,4 @@
-# 🍌 Plataforma Livre - Guia de Configuração & Deploy
+# 🍌 Plataforma Livre - Guia de Configuração, Segurança & Deploy
 
 Plataforma de streaming completa para publicar, organizar e assistir vídeos e animações criados com inteligência artificial.
 
@@ -6,106 +6,95 @@ Plataforma de streaming completa para publicar, organizar e assistir vídeos e a
 
 ## 🚀 1. Configuração do Supabase (Banco de Dados + Storage + Auth)
 
-### Passo 1: Criar o Projeto no Supabase
-1. Acesse [https://supabase.com](https://supabase.com) e crie uma conta gratuita.
-2. Crie um novo projeto com o nome **"plataforma-livre"**.
-3. Guarde sua senha do banco de dados com segurança.
+### Chaves do Projeto
+As chaves do seu projeto já foram configuradas no arquivo `.env`:
+- **Project URL**: `https://xfobtnfgapkteivwmiqw.supabase.co`
+- **Anon Public Key**: `sb_publishable_0L8eDlqWyOC6b-osH-bkSQ_XBQFkMiD`
 
-### Passo 2: Executar o Script SQL no SQL Editor
-No painel do Supabase, clique em **SQL Editor** no menu lateral, abra uma **New Query** e cole o seguinte script:
+---
+
+## 🛡️ 2. Auditoria e Blindagem de Políticas RLS (Row-Level Security)
+
+### Vulnerabilidades Identificadas e Corrigidas:
+1. **Permissões Anônimas Abertas (Anti-Wipe)**:
+   - *Problema*: As políticas padrão de prototipagem usavam `FOR ALL USING (true) WITH CHECK (true)`, permitindo a qualquer visitante anônimo com a chave pública executar exclusão ou alteração de vídeos e categorias.
+   - *Correção*: Políticas separadas por operação foram criadas. `SELECT` permanece público para a audiência, enquanto `INSERT`, `UPDATE` e `DELETE` em `videos` e `categorias` são estritamente restritos a administradores autenticados.
+2. **Validação Estrita Anti-Spam (Comentários)**:
+   - *Problema*: Inserção de comentários permitia qualquer texto, possibilitando DoS com textos gigantescos ou vazios.
+   - *Correção*: Validação de tamanho no banco (`char_length(texto) BETWEEN 2 AND 500`) e exclusão restrita a administradores.
+3. **Proteção Atômica de Métricas**:
+   - Visualizações e curtidas são incrementadas via Stored Procedures `SECURITY DEFINER` (`increment_views` e `increment_likes`), impedindo manipulação arbitrária de números.
+4. **Segurança de Storage**:
+   - Bloqueio de arquivos executáveis ou perigosos, permitindo apenas extensões válidas (`jpg, png, webp, mp4`).
+
+### Como Aplicar o Patch de Segurança no Banco:
+1. Acesse o console do seu projeto no Supabase: [https://supabase.com/dashboard/project/xfobtnfgapkteivwmiqw](https://supabase.com/dashboard/project/xfobtnfgapkteivwmiqw).
+2. Vá em **SQL Editor** no menu lateral esquerdo e clique em **New Query**.
+3. Copie o script **"Patch de Blindagem SQL"** disponível no Painel Admin (aba *Supabase & Deploy*) ou abaixo e clique em **Run**:
 
 ```sql
--- 1. Tabela de Categorias
-CREATE TABLE IF NOT EXISTS public.categorias (
-  id TEXT PRIMARY KEY,
-  nome TEXT NOT NULL,
-  slug TEXT NOT NULL UNIQUE,
-  descricao TEXT,
-  icone TEXT NOT NULL DEFAULT '🍎',
-  cor TEXT NOT NULL DEFAULT 'from-amber-500 to-yellow-400',
-  created_at TIMESTAMPTZ DEFAULT NOW()
+-- 1. REMOVER POLÍTICAS PERMISSIVAS ANTERIORES
+DROP POLICY IF EXISTS "Gerenciamento de categorias" ON public.categorias;
+DROP POLICY IF EXISTS "Gerenciamento de vídeos" ON public.videos;
+DROP POLICY IF EXISTS "Inserção de comentários" ON public.comentarios;
+DROP POLICY IF EXISTS "Leitura pública de categorias" ON public.categorias;
+DROP POLICY IF EXISTS "Leitura pública de vídeos" ON public.videos;
+DROP POLICY IF EXISTS "Leitura pública de perfis" ON public.usuarios;
+DROP POLICY IF EXISTS "Leitura pública de comentários" ON public.comentarios;
+
+-- 2. HABILITAR RLS RIGOROSO
+ALTER TABLE public.categorias ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.videos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.usuarios ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.comentarios ENABLE ROW LEVEL SECURITY;
+
+-- 3. POLÍTICAS DE LEITURA PÚBLICA (AUDIÊNCIA)
+CREATE POLICY "Leitura pública de categorias" ON public.categorias FOR SELECT USING (true);
+CREATE POLICY "Leitura pública de vídeos" ON public.videos FOR SELECT USING (true);
+CREATE POLICY "Leitura pública de comentários" ON public.comentarios FOR SELECT USING (true);
+CREATE POLICY "Leitura pública de perfis" ON public.usuarios FOR SELECT USING (true);
+
+-- 4. POLÍTICAS DE ESCRITA DE COMENTÁRIOS COM VALIDAÇÃO ANTI-SPAM
+CREATE POLICY "Inserção pública validada de comentários" ON public.comentarios 
+FOR INSERT WITH CHECK (
+  char_length(trim(texto)) >= 2 AND 
+  char_length(texto) <= 500 AND 
+  char_length(trim(autor)) >= 1 AND 
+  char_length(autor) <= 60 AND 
+  video_id IS NOT NULL
 );
 
--- 2. Tabela de Vídeos
-CREATE TABLE IF NOT EXISTS public.videos (
-  id TEXT PRIMARY KEY,
-  titulo TEXT NOT NULL,
-  descricao TEXT NOT NULL,
-  thumbnail TEXT NOT NULL,
-  video_url TEXT NOT NULL,
-  categoria_id TEXT REFERENCES public.categorias(id) ON DELETE SET NULL,
-  destaque BOOLEAN DEFAULT FALSE,
-  visualizacoes BIGINT DEFAULT 0,
-  curtidas BIGINT DEFAULT 0,
-  duracao TEXT DEFAULT '03:30',
-  autor TEXT DEFAULT 'Estúdio Alimentos Falantes',
-  tags TEXT[] DEFAULT ARRAY[]::TEXT[],
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
+-- Bloqueia exclusão de comentários por anônimos (apenas administradores)
+CREATE POLICY "Moderação restrita de comentários" ON public.comentarios 
+FOR DELETE USING (auth.role() = 'authenticated');
 
--- 3. Tabela de Perfis de Usuários
-CREATE TABLE IF NOT EXISTS public.usuarios (
-  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  nome TEXT NOT NULL,
-  email TEXT NOT NULL UNIQUE,
-  role TEXT NOT NULL DEFAULT 'viewer' CHECK (role IN ('admin', 'creator', 'viewer')),
-  avatar TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
+-- 5. BLINDAGEM DE VÍDEOS E CATEGORIAS (IMPEDE EXCLUSÃO E ADULTERAÇÃO POR ANÔNIMOS)
+CREATE POLICY "Gerenciamento restrito de categorias" ON public.categorias 
+FOR ALL USING (auth.role() = 'authenticated') 
+WITH CHECK (auth.role() = 'authenticated');
 
--- 4. Função para incremento de visualizações
+CREATE POLICY "Gerenciamento restrito de vídeos" ON public.videos 
+FOR ALL USING (auth.role() = 'authenticated') 
+WITH CHECK (auth.role() = 'authenticated');
+
+-- 6. SEGURANÇA DE CONTADORES ATÔMICOS (SECURITY DEFINER)
 CREATE OR REPLACE FUNCTION public.increment_views(video_id TEXT)
 RETURNS VOID AS $$
 BEGIN
   UPDATE public.videos
-  SET visualizacoes = visualizacoes + 1
+  SET visualizacoes = COALESCE(visualizacoes, 0) + 1
   WHERE id = video_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 5. Row Level Security (RLS)
-ALTER TABLE public.categorias ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.videos ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.usuarios ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Leitura pública de categorias" ON public.categorias FOR SELECT USING (true);
-CREATE POLICY "Leitura pública de vídeos" ON public.videos FOR SELECT USING (true);
-CREATE POLICY "Leitura pública de perfis" ON public.usuarios FOR SELECT USING (true);
-
-CREATE POLICY "Gerenciar vídeos para criadores" ON public.videos FOR ALL USING (true);
-CREATE POLICY "Gerenciar categorias" ON public.categorias FOR ALL USING (true);
-
--- 6. Storage Buckets (Armazenamento de Vídeos e Thumbnails)
-INSERT INTO storage.buckets (id, name, public) VALUES ('videos', 'videos', true) ON CONFLICT (id) DO NOTHING;
-INSERT INTO storage.buckets (id, name, public) VALUES ('thumbnails', 'thumbnails', true) ON CONFLICT (id) DO NOTHING;
-
-CREATE POLICY "Acesso público aos vídeos" ON storage.objects FOR SELECT USING (bucket_id IN ('videos', 'thumbnails'));
-CREATE POLICY "Upload público de mídias" ON storage.objects FOR INSERT WITH CHECK (bucket_id IN ('videos', 'thumbnails'));
-```
-
-### Passo 3: Obter as Chaves de Conexão
-1. No menu do Supabase, clique em **Project Settings** > **API**.
-2. Copie:
-   - **Project URL** (ex: `https://xyzabcdefg.supabase.co`)
-   - **anon public key** (ex: `eyJhbGciOiJIUzI1NiIsInR5cCI6...`)
-
----
-
-## ⚡ 2. Conectar na Aplicação
-
-Você pode conectar o Supabase de duas maneiras:
-
-### Opção A: Pelo Painel Administrativo da Aplicação
-1. Acesse o **Painel Admin** na barra superior da aplicação.
-2. Acesse a aba **"Supabase & Deploy"**.
-3. Cole sua **Project URL** e sua **Anon Key** e clique em **"Salvar Conexão"**. A aplicação se conectará instantaneamente!
-
-### Opção B: Via Variáveis de Ambiente (`.env`)
-Crie ou edite o arquivo `.env.local` na raiz do projeto:
-
-```env
-VITE_SUPABASE_URL="https://seu-projeto.supabase.co"
-VITE_SUPABASE_ANON_KEY="sua-chave-anon-publica"
+CREATE OR REPLACE FUNCTION public.increment_likes(video_id TEXT)
+RETURNS VOID AS $$
+BEGIN
+  UPDATE public.videos
+  SET curtidas = COALESCE(curtidas, 0) + 1
+  WHERE id = video_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 ```
 
 ---

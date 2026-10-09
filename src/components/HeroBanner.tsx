@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Play, Info, Heart, Volume2, VolumeX, Sparkles, Share2 } from 'lucide-react';
 import { Video, Categoria } from '../types';
+import { sanitizeSafeUrl } from '../lib/security';
 
 interface HeroBannerProps {
   video: Video;
@@ -22,13 +23,14 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
   onShare
 }) => {
   const [isMuted, setIsMuted] = useState(true);
+  const safeThumbnail = sanitizeSafeUrl(video.thumbnail);
 
   return (
     <section className="relative w-full overflow-hidden bg-slate-950 min-h-[460px] sm:min-h-[540px] lg:min-h-[600px] flex items-end">
       {/* Background Media with Zero-Broken-Image fallback */}
       <div className="absolute inset-0 z-0">
         <img
-          src={video.thumbnail}
+          src={safeThumbnail}
           alt={video.titulo}
           referrerPolicy="no-referrer"
           className="w-full h-full object-cover object-center scale-105 filter brightness-90 animate-fade-in"

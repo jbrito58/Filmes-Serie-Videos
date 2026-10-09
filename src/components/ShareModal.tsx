@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Check, Copy, Share2, MessageCircle, Send, Twitter } from 'lucide-react';
 import { Video } from '../types';
+import { sanitizeSafeUrl } from '../lib/security';
 
 interface ShareModalProps {
   video: Video | null;
@@ -12,7 +13,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({ video, onClose }) => {
 
   if (!video) return null;
 
-  const currentUrl = window.location.href;
+  const currentUrl = typeof window !== 'undefined' ? window.location.href : '';
   const shareText = `Assista ao episódio divertido "${video.titulo}" na Plataforma Livre!`;
 
   const handleCopyLink = () => {
@@ -21,20 +22,11 @@ export const ShareModal: React.FC<ShareModalProps> = ({ video, onClose }) => {
     setTimeout(() => setCopied(false), 2500);
   };
 
-  const shareToWhatsapp = () => {
-    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(`${shareText} ${currentUrl}`)}`;
-    window.open(url, '_blank');
-  };
+  const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(`${shareText} ${currentUrl}`)}`;
+  const telegramUrl = `https://t.me/share/url?url=${encodeURIComponent(currentUrl)}&text=${encodeURIComponent(shareText)}`;
+  const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(currentUrl)}`;
 
-  const shareToTelegram = () => {
-    const url = `https://t.me/share/url?url=${encodeURIComponent(currentUrl)}&text=${encodeURIComponent(shareText)}`;
-    window.open(url, '_blank');
-  };
-
-  const shareToTwitter = () => {
-    const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(currentUrl)}`;
-    window.open(url, '_blank');
-  };
+  const safeThumbnail = sanitizeSafeUrl(video.thumbnail);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
@@ -53,6 +45,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({ video, onClose }) => {
           </div>
           <button
             onClick={onClose}
+            aria-label="Fechar modal"
             className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white transition-colors"
           >
             <X className="w-4 h-4" />
@@ -62,7 +55,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({ video, onClose }) => {
         {/* Video Thumbnail snippet */}
         <div className="flex items-center gap-3 p-3 rounded-2xl bg-slate-950/60 border border-slate-800">
           <img
-            src={video.thumbnail}
+            src={safeThumbnail}
             alt={video.titulo}
             className="w-16 h-12 rounded-lg object-cover"
           />
@@ -72,31 +65,37 @@ export const ShareModal: React.FC<ShareModalProps> = ({ video, onClose }) => {
           </div>
         </div>
 
-        {/* Quick Social Buttons */}
+        {/* Quick Social Buttons with noopener noreferrer */}
         <div className="grid grid-cols-3 gap-3">
-          <button
-            onClick={shareToWhatsapp}
+          <a
+            href={whatsappUrl}
+            target="_blank"
+            rel="noopener noreferrer"
             className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-2xl bg-emerald-600/15 border border-emerald-600/30 text-emerald-400 hover:bg-emerald-600/25 transition-colors"
           >
             <MessageCircle className="w-6 h-6" />
             <span className="text-xs font-semibold">WhatsApp</span>
-          </button>
+          </a>
 
-          <button
-            onClick={shareToTelegram}
+          <a
+            href={telegramUrl}
+            target="_blank"
+            rel="noopener noreferrer"
             className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-2xl bg-sky-600/15 border border-sky-600/30 text-sky-400 hover:bg-sky-600/25 transition-colors"
           >
             <Send className="w-6 h-6" />
             <span className="text-xs font-semibold">Telegram</span>
-          </button>
+          </a>
 
-          <button
-            onClick={shareToTwitter}
+          <a
+            href={twitterUrl}
+            target="_blank"
+            rel="noopener noreferrer"
             className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-2xl bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 transition-colors"
           >
             <Twitter className="w-6 h-6 text-sky-400" />
             <span className="text-xs font-semibold">Twitter / X</span>
-          </button>
+          </a>
         </div>
 
         {/* Copy Link input */}
@@ -123,6 +122,11 @@ export const ShareModal: React.FC<ShareModalProps> = ({ video, onClose }) => {
           </div>
         </div>
 
+        <div className="text-center pt-2">
+          <p className="text-[11px] text-slate-500">
+            Link protegido e seguro para visualização em qualquer dispositivo.
+          </p>
+        </div>
       </div>
     </div>
   );

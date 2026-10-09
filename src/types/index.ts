@@ -46,3 +46,30 @@ export interface SupabaseConfig {
   anonKey: string;
   isConfigured: boolean;
 }
+
+export interface SupabaseTableStatus {
+  exists: boolean;
+  count: number;
+  error?: string;
+}
+
+export interface SupabaseHealthCheck {
+  success: boolean;
+  message: string;
+  tablesExist: boolean;
+  tables: {
+    categorias: SupabaseTableStatus;
+    videos: SupabaseTableStatus;
+    usuarios: SupabaseTableStatus;
+    comentarios: SupabaseTableStatus;
+  };
+  storage: {
+    thumbnails: { exists: boolean; error?: string };
+    videos: { exists: boolean; error?: string };
+  };
+  rpc: {
+    increment_views: boolean;
+    increment_likes: boolean;
+  };
+}
+

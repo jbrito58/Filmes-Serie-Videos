@@ -19,7 +19,8 @@ import {
   fetchCategories, 
   getFavoriteVideoIds, 
   toggleFavoriteVideo,
-  getSavedCredentials 
+  getSavedCredentials,
+  checkSupabaseConnection 
 } from './lib/supabase';
 import { Flame, Clock, Sparkles, Heart } from 'lucide-react';
 
@@ -52,15 +53,15 @@ export default function App() {
   // Load initial data
   const loadData = async () => {
     try {
-      const [loadedVideos, loadedCategories] = await Promise.all([
+      const [loadedVideos, loadedCategories, health] = await Promise.all([
         fetchVideos(),
-        fetchCategories()
+        fetchCategories(),
+        checkSupabaseConnection()
       ]);
       setVideos(loadedVideos);
       setCategories(loadedCategories);
       setFavoriteIds(getFavoriteVideoIds());
-      const creds = getSavedCredentials();
-      setIsSupabaseConnected(creds.isConfigured);
+      setIsSupabaseConnected(health.success && health.tablesExist);
     } catch (err) {
       console.error('Erro ao carregar dados:', err);
     } finally {

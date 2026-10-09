@@ -21,7 +21,8 @@ import {
   ThumbsUp
 } from 'lucide-react';
 import { Video, Categoria, Comentario } from '../types';
-import { getCommentsForVideo, addCommentToVideo, incrementVideoViews } from '../lib/supabase';
+import { getCommentsForVideo, addCommentToVideo, incrementVideoViews, incrementVideoLikes } from '../lib/supabase';
+import { sanitizeSafeUrl, validateCommentInput } from '../lib/security';
 
 interface VideoPlayerProps {
   video: Video;
@@ -70,22 +71,29 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   // Increment views and load comments on video change
   useEffect(() => {
     incrementVideoViews(video.id);
-    const loadedComments = getCommentsForVideo(video.id);
-    setComments(loadedComments);
+    let isSubscribed = true;
+    getCommentsForVideo(video.id).then(loadedComments => {
+      if (isSubscribed) setComments(loadedComments);
+    });
     setLikesCount(video.curtidas || 420);
     setHasLiked(false);
     setIsPlaying(false);
     setCurrentTime(0);
 
-    if (videoRef.current) {
-      videoRef.current.currentTime = 0;
-      videoRef.current.play().then(() => {
+    const videoEl = videoRef.current;
+    if (videoEl) {
+      videoEl.currentTime = 0;
+      videoEl.play().then(() => {
         setIsPlaying(true);
       }).catch(() => {
         // Autoplay policy prevented playback, wait for user click
         setIsPlaying(false);
       });
     }
+
+    return () => {
+      isSubscribed = false;
+    };
   }, [video.id]);
 
   const togglePlay = () => {
@@ -173,6 +181,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     } else {
       setLikesCount(prev => prev + 1);
       setHasLiked(true);
+      incrementVideoLikes(video.id);
       // Trigger joyful celebratory confetti
       confetti({
         particleCount: 50,
@@ -182,18 +191,24 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
   };
 
-  const handleAddComment = (e: React.FormEvent) => {
+  const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!commentText.trim()) return;
 
-    const newCom = addCommentToVideo(video.id, {
+    const validation = validateCommentInput({
       autor: commentAuthor || 'Fã dos Alimentos',
       emoji: selectedEmoji,
       texto: commentText
     });
 
-    setComments(prev => [newCom, ...prev]);
+    if (!validation.isValid) {
+      return;
+    }
+
     setCommentText('');
+
+    const newCom = await addCommentToVideo(video.id, validation.sanitized);
+    setComments(prev => [newCom, ...prev]);
   };
 
   const formatTime = (timeInSeconds: number) => {
@@ -201,6 +216,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     const secs = Math.floor(timeInSeconds % 60);
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
+
+  const safeVideoUrl = sanitizeSafeUrl(video.video_url);
+  const safePosterUrl = sanitizeSafeUrl(video.thumbnail);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 py-6 px-4 sm:px-6 lg:px-8">
@@ -253,8 +271,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             >
               <video
                 ref={videoRef}
-                src={video.video_url}
-                poster={video.thumbnail}
+                src={safeVideoUrl}
+                poster={safePosterUrl}
                 onTimeUpdate={handleTimeUpdate}
                 onLoadedMetadata={handleLoadedMetadata}
                 onEnded={() => setIsPlaying(false)}
